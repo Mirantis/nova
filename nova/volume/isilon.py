@@ -33,11 +33,11 @@ class IsilonDriver(san.SanISCSIDriver):
     """Executes volume driver commands on Isilon.
     To use this driver the following flags should be set in nova.conf file:
 
-    san_ip - IP address of SAN controller.
-    san_login - Username for SAN controller.
-    san_ssh_port - SSH port to use with SAN.
-    san_password - Password for SAN controller or it can be
-    san_private_key - filename of private key to use for SSH authentication.
+    :san_ip: IP address of SAN controller.
+    :san_login: username for SAN controller.
+    :san_ssh_port: SSH port to use with SAN.
+    :san_password: password for SAN controller or it can be
+    :san_private_key: filename of private key to use for SSH authentication.
     """
 
     def __init__(self):
@@ -117,7 +117,7 @@ class IsilonDriver(san.SanISCSIDriver):
 
     def delete_volume(self, volume):
         """Deletes LUN (Logical Unit)
-        :param volume: reference of volume to be created,
+        :param volume: reference of volume to be created
         """
         LOG.debug('LUN %s deletion started' % volume['name'])
         self._execute('isi', 'lun', 'delete', '--name=%s' % volume['name'],
@@ -156,6 +156,8 @@ class IsilonDriver(san.SanISCSIDriver):
     def create_export(self, context, volume):
         """Exports LUN. There is nothing to export, so this method just
         returns provider location that will be added to DB after exporting.
+        :param context: context sent to this method
+        :param volume: reference of volume export needed for
         """
         LOG.debug('Export creating started for the volume %s' % volume['name'])
         #Here iscsi target should be created and linked to volume.
