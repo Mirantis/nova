@@ -30,7 +30,15 @@ FLAGS.register_opts(isilon_opts)
 
 
 class IsilonDriver(san.SanISCSIDriver):
-    """Executes volume driver commands on Isilon"""
+    """Executes volume driver commands on Isilon.
+    To use this driver the following flags should be set in nova.conf file:
+
+    san_ip - IP address of SAN controller.
+    san_login - Username for SAN controller.
+    san_ssh_port - SSH port to use with SAN.
+    san_password - Password for SAN controller or it can be
+    san_private_key - filename of private key to use for SSH authentication.
+    """
 
     def __init__(self):
         super(IsilonDriver, self).__init__()
