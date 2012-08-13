@@ -117,7 +117,7 @@ class IsilonDriver(san.SanISCSIDriver):
 
     def delete_volume(self, volume):
         """Deletes LUN (Logical Unit)
-        :param volume: reference of volume to be created
+        :param volume: reference of volume to be deleted
         """
         LOG.debug('LUN %s deletion started' % volume['name'])
         self._execute('isi', 'lun', 'delete', '--name=%s' % volume['name'],
