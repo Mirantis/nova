@@ -149,7 +149,13 @@ network_opts = [
                help='domain to use for building the hostnames'),
     cfg.StrOpt('l3_lib',
                default='nova.network.l3.LinuxNetL3',
-               help="Indicates underlying L3 management library")
+               help="Indicates underlying L3 management library"),
+    cfg.IntOpt('additional_bottom_reserved_ips',
+               default=0,
+               help='Number of IPs to reserve at the bottom of network range'),
+    cfg.StrOpt('dhcp_driver',
+               default='nova.network.dhcp_driver.LinuxNetDHCPDriver',
+               help="DHCP driver class"),
     ]
 
 
@@ -715,6 +721,7 @@ class NetworkManager(manager.SchedulerDependentManager):
             self._import_ipam_lib('nova.network.quantum.nova_ipam_lib')
         l3_lib = kwargs.get("l3_lib", FLAGS.l3_lib)
         self.l3driver = utils.import_object(l3_lib)
+        self.dhcp_driver = utils.import_object(FLAGS.dhcp_driver)
 
         super(NetworkManager, self).__init__(service_name='network',
                                                 *args, **kwargs)
@@ -1188,6 +1195,8 @@ class NetworkManager(manager.SchedulerDependentManager):
                                                    "A",
                                                    self.instance_dns_domain)
         self._setup_network_on_host(context, network)
+        if network['cidr']:
+            self.dhcp_driver.add_interface(context, network, address, vif)
         return address
 
     def deallocate_fixed_ip(self, context, address, **kwargs):
@@ -1206,27 +1215,12 @@ class NetworkManager(manager.SchedulerDependentManager):
 
         network = self._get_network_by_id(context, fixed_ip_ref['network_id'])
         self._teardown_network_on_host(context, network)
-
-        if FLAGS.force_dhcp_release:
-            dev = self.driver.get_dev(network)
-            # NOTE(vish): The below errors should never happen, but there may
-            #             be a race condition that is causing them per
-            #             https://code.launchpad.net/bugs/968457, so we log
-            #             an error to help track down the possible race.
-            msg = _("Unable to release %s because vif doesn't exist.")
-            if not vif_id:
-                LOG.error(msg % address)
-                return
-
+        if vif_id:
             vif = self.db.virtual_interface_get(context, vif_id)
-
-            if not vif:
-                LOG.error(msg % address)
-                return
-
-            # NOTE(vish): This forces a packet so that the release_fixed_ip
-            #             callback will get called by nova-dhcpbridge.
-            self.driver.release_dhcp(dev, address, vif['address'])
+        else:
+            vif = None
+        self.dhcp_driver.remove_interface(context, network,
+                fixed_ip_ref['address'], vif)
 
         self.db.fixed_ip_update(context, address,
                                 {'allocated': False,
@@ -1703,10 +1697,8 @@ class FlatDHCPManager(RPCAllocateFixedIP, FloatingIP, NetworkManager):
         self.l3driver.initialize_gateway(network)
 
         if not FLAGS.fake_network:
-            dev = self.driver.get_dev(network)
-            self.driver.update_dhcp(context, dev, network)
+            self.dhcp_driver.init_network(context, network)
             if(FLAGS.use_ipv6):
-                self.driver.update_ra(context, dev, network)
                 gateway = utils.get_my_linklocal(dev)
                 self.db.network_update(context, network['id'],
                                        {'gateway_v6': gateway})
@@ -1714,8 +1706,7 @@ class FlatDHCPManager(RPCAllocateFixedIP, FloatingIP, NetworkManager):
     def _teardown_network_on_host(self, context, network):
         if not FLAGS.fake_network:
             network['dhcp_server'] = self._get_dhcp_ip(context, network)
-            dev = self.driver.get_dev(network)
-            self.driver.update_dhcp(context, dev, network)
+            self.dhcp_driver.teardown_network(context, network)
 
     def _get_network_by_id(self, context, network_id):
         return NetworkManager._get_network_by_id(self, context.elevated(),
@@ -1794,6 +1785,7 @@ class VlanManager(RPCAllocateFixedIP, FloatingIP, NetworkManager):
                   'virtual_interface_id': vif['id']}
         self.db.fixed_ip_update(context, address, values)
         self._setup_network_on_host(context, network)
+        self.dhcp_driver.add_interface(context, network, address, vif)
         return address
 
     @wrap_check_policy
@@ -1852,10 +1844,9 @@ class VlanManager(RPCAllocateFixedIP, FloatingIP, NetworkManager):
                     network['vpn_public_port'],
                     network['vpn_private_address'])
         if not FLAGS.fake_network:
-            dev = self.driver.get_dev(network)
-            self.driver.update_dhcp(context, dev, network)
+            self.dhcp_driver.init_network(context, network)
             if(FLAGS.use_ipv6):
-                self.driver.update_ra(context, dev, network)
+                dev = self.driver.get_dev(network)
                 gateway = utils.get_my_linklocal(dev)
                 self.db.network_update(context, network['id'],
                                        {'gateway_v6': gateway})
@@ -1863,8 +1854,7 @@ class VlanManager(RPCAllocateFixedIP, FloatingIP, NetworkManager):
     def _teardown_network_on_host(self, context, network):
         if not FLAGS.fake_network:
             network['dhcp_server'] = self._get_dhcp_ip(context, network)
-            dev = self.driver.get_dev(network)
-            self.driver.update_dhcp(context, dev, network)
+            self.dhcp_driver.teardown_network(context, network)
 
     def _get_networks_by_uuids(self, context, network_uuids):
         return self.db.network_get_all_by_uuids(context, network_uuids,
