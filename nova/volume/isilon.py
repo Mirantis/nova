@@ -7,9 +7,6 @@ LOG = logging.getLogger(__name__)
 FLAGS = flags.FLAGS
 
 isilon_opts = [
-    cfg.StrOpt('isilon_host',
-        default='',
-        help='IP address of Isilon SA'),
     cfg.StrOpt('isilon_iscsi_target_portal_port',
         default=3260,
         help='Isilon target portal port'),
@@ -157,7 +154,7 @@ class IsilonDriver(san.SanISCSIDriver):
         #But on Isilon target should be created before LUN.
         #So to the moment of exporting we already have target linked to LUN.
         return {'provider_location': '%s:%s,1 %s' %
-                                     (FLAGS.isilon_host,
+                                     (FLAGS.san_ip,
                                       FLAGS.isilon_iscsi_target_portal_port,
                                       self._target_name(volume))}
 
