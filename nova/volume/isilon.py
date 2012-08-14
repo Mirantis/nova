@@ -7,9 +7,6 @@ LOG = logging.getLogger(__name__)
 FLAGS = flags.FLAGS
 
 isilon_opts = [
-    cfg.StrOpt('isilon_iscsi_target_portal_port',
-        default=3260,
-        help='Isilon target portal port'),
     cfg.StrOpt('isilon_thin_provisioning',
         default=True,
         help='Should the thin provisioning be used'),
@@ -165,7 +162,7 @@ class IsilonDriver(san.SanISCSIDriver):
         #So to the moment of exporting we already have target linked to LUN.
         return {'provider_location': '%s:%s,1 %s' %
                                      (FLAGS.san_ip,
-                                      FLAGS.isilon_iscsi_target_portal_port,
+                                      FLAGS.iscsi_port,
                                       self._target_name(volume))}
 
     def ensure_export(self, context, volume):
