@@ -53,7 +53,7 @@ class IsilonDriver(san.SanISCSIDriver):
         LOG.debug('Target %s creation started' % target_name)
         try:
             self._execute('isi', 'target', 'create', '--name=%s' % target_name,
-                '--require-allow=%s' % True)
+                          '--require-allow=%s' % True)
         except Exception:
             LOG.debug('Target with name %s has existed already' % target_name)
 
@@ -75,7 +75,7 @@ class IsilonDriver(san.SanISCSIDriver):
         """
         LOG.debug('Target %s deleting started' % target_name)
         self._execute('isi', 'target', 'delete', '--name=%s' % target_name,
-            '--force')
+                      '--force')
 
     def create_volume(self, volume):
         """Creates LUN (Logical Unit) on Isilon
@@ -107,10 +107,10 @@ class IsilonDriver(san.SanISCSIDriver):
         :param volume: reference of volume to be created
         :param snapshot: reference of source snapshot
         """
-        LOG.debug('LUN %s creating from snapshot %s started', (volume['name'],
-                                                               snapshot['name']))
+        LOG.debug('LUN %s creating from snapshot %s started',
+                  (volume['name'], snapshot['name']))
         self._execute('isi', 'lun', 'clone', '--name=%s' % snapshot['name'],
-            '--clone=%s' % volume['name'], '--type=normal')
+                      '--clone=%s' % volume['name'], '--type=normal')
 
     def delete_volume(self, volume):
         """Deletes LUN (Logical Unit)
@@ -118,11 +118,11 @@ class IsilonDriver(san.SanISCSIDriver):
         """
         LOG.debug('LUN %s deletion started' % volume['name'])
         self._execute('isi', 'lun', 'delete', '--name=%s' % volume['name'],
-            '--force' if FLAGS.isilon_lun_force_deletion else '')
+                      '--force' if FLAGS.isilon_lun_force_deletion else '')
 
         lun_list = self._execute('isi', 'target', 'list',
-            '--name=%s' % self._target_name(volume),
-            '--luns')
+                                 '--name=%s' % self._target_name(volume),
+                                 '--luns')
         #LUN number for target checking
         #if there are no LUNs in the target it should be deleted
         if not lun_list:
@@ -138,9 +138,9 @@ class IsilonDriver(san.SanISCSIDriver):
         LOG.debug('Snapshot creating started for the snapshot with name %s' %
                   snapshot['name'])
         self._execute('isi', 'lun', 'clone',
-            '--name=%s' %
-            self._target_name(snapshot) + snapshot['volume_id'],
-            '--clone=%s' % snapshot['name'], '--type=snapshot')
+                      '--name=%s' %
+                      self._target_name(snapshot) + snapshot['volume_id'],
+                      '--clone=%s' % snapshot['name'], '--type=snapshot')
 
     def delete_snapshot(self, snapshot):
         """Deletes LUN snapshot (LUN clone with type 'snapshot' meant).
@@ -188,8 +188,8 @@ class IsilonDriver(san.SanISCSIDriver):
         LOG.debug('Connection to the volume with name %s initializing' %
                   volume['name'])
         self._update_target(self._target_name(volume),
-                {'initiator': connector['initiator'],
-                 'require-allow': True})
+                            {'initiator': connector['initiator'],
+                            'require-allow': True})
         iscsi_properties = self._get_iscsi_properties(volume)
         return {'driver_volume_type': 'iscsi', 'data': iscsi_properties}
 
@@ -202,4 +202,4 @@ class IsilonDriver(san.SanISCSIDriver):
         LOG.debug('Connection to the volume with name %s terminating' %
                   volume['name'])
         self._update_target(self._target_name(volume),
-                {'initiator': 'no', 'require-allow': False})
+                            {'initiator': 'no', 'require-allow': False})
