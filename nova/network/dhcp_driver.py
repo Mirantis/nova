@@ -31,7 +31,7 @@ class LinuxNetDHCPDriver(object):
 
     def init_network(self, ctx, network_ref):
         dev = self.driver.get_dev(network_ref)
-        self.driver.update_dhcp(ctx, ctx, dev, network_ref)
+        self.driver.update_dhcp(ctx, dev, network_ref)
         if FLAGS.use_ipv6:
             self.driver.update_ra(ctx, dev, network_ref)
 
