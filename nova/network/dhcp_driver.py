@@ -4,11 +4,7 @@ from nova import utils
 
 LOG = logging.getLogger(__name__)
 
-#dhcp_opts = [
-#]
-
 FLAGS = flags.FLAGS
-#FLAGS.register_opts(dhcp_opts)
 
 
 class DHCPDriver(object):
@@ -25,7 +21,7 @@ class DHCPDriver(object):
         raise NotImplementedError
 
 
-class LinuxNetDHCPDriver(object):
+class LinuxNetDHCPDriver(DHCPDriver):
     def __init__(self):
         self.driver = utils.import_object(FLAGS.network_driver)
 
@@ -57,16 +53,3 @@ class LinuxNetDHCPDriver(object):
                 # NOTE(vish): This forces a packet so that the release_fixed_ip
                 #             callback will get called by nova-dhcpbridge.
                 self.driver.release_dhcp(dev, ip, vif['address'])
-
-
-class InfoBloxDHCPDriver(object):
-    def init_network(self, ctx, network_ref):
-        # TODO(yorik-sar): ensure network exists on InfoBlox
-        raise NotImplementedError
-
-    def add_interface(self, ctx, network_ref, ip, vif):
-        # TODO(yorik-sar): do it
-        raise NotImplementedError
-
-    def remove_interace(self, ctx, ip, vif):
-        raise NotImplementedError
