@@ -1,7 +1,7 @@
 import cStringIO as StringIO
-import collections
-import re
 
+from nova import exception
+from nova import flags
 from nova import log as logging
 from nova.network import dhcp_driver
 from nova.openstack.common import cfg
@@ -16,21 +16,21 @@ infoblox_opts = [
     cfg.StrOpt('infoblox_password', default='infoblox'),
 ]
 FLAGS = flags.FLAGS
+FLAGS.register_opts(infoblox_opts)
 
 
 class IbcliError(Exception):
     pass
 
 
-def run_ibcli(self, cmd):
-    stdout, stderr = utils.execute([FLAGS.infoblox_cli_command,
+def run_ibcli(cmd):
+    stdout, stderr = utils.execute(FLAGS.infoblox_cli_command,
         '-s', FLAGS.infoblox_address,
         '-u', FLAGS.infoblox_user,
         '-p', FLAGS.infoblox_password,
-        '-e', cmd])
+        '-e', cmd)
     output = StringIO.StringIO(stdout)
-    first_line = output.readline()
-    res = collections.OrderedDict()
+    res = {}
     res_list = None
     for line in output:
         if not line.startswith(' '):
@@ -39,7 +39,7 @@ def run_ibcli(self, cmd):
                     res_list = []
                 if res:
                     res_list.append(res)
-                    res = collections.OrderedDict()
+                    res = {}
         else:
             k, _, v = line.partition(':')
             k, v = k.strip(), v.strip()
@@ -101,12 +101,12 @@ class InfobloxDNSDriver(object):
         return [name[:-len(domain) - 1] for name in all_names
                                         if name.endswith('.' + domain)]
 
-    def get_entries_by_name(self, _name, _domain):
+    def get_entries_by_name(self, name, domain):
         res = run_ibcli('show host %s.%s' % (name, domain))
         return res.get('ipv4addrs', '').split()
 
     def create_domain(self, fqdomain):
         run_ibcli('conf zone add %s' % (fqdomain,))
 
-    def delete_domain(self, _fqdomain):
+    def delete_domain(self, fqdomain):
         run_ibcli('conf zone del %s' % (fqdomain,))
