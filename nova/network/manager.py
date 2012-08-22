@@ -1140,13 +1140,17 @@ class NetworkManager(manager.SchedulerDependentManager):
                                     instance_id=instance_id, ip=address)
 
     def _validate_instance_zone_for_dns_domain(self, context, instance_id):
+        LOG.debug('Validating bla-bla-bla for instance %s', instance_id)
         instance = self.db.instance_get(context, instance_id)
         instance_zone = instance.get('availability_zone')
+        LOG.debug('self.instance_dns_domain=%r', self.instance_dns_domain)
         if not self.instance_dns_domain:
             return True
         instance_domain = self.instance_dns_domain
+        LOG.debug('instance_zone=%r', instance_zone)
         domainref = self.db.dnsdomain_get(context, instance_zone)
         dns_zone = domainref.availability_zone
+        LOG.debug('dns_zone=%r, instance_zone=%r', dns_zone, instance_zone)
         if dns_zone and (dns_zone != instance_zone):
             LOG.warn(_('instance-dns-zone is |%(domain)s|, '
                        'which is in availability zone |%(zone)s|. '
@@ -1784,6 +1788,18 @@ class VlanManager(RPCAllocateFixedIP, FloatingIP, NetworkManager):
         values = {'allocated': True,
                   'virtual_interface_id': vif['id']}
         self.db.fixed_ip_update(context, address, values)
+
+        if self._validate_instance_zone_for_dns_domain(context, instance_id):
+            instance_ref = self.db.instance_get(context, instance_id)
+            name = instance_ref['display_name']
+            uuid = instance_ref['uuid']
+            self.instance_dns_manager.create_entry(name, address,
+                                                   "A",
+                                                   self.instance_dns_domain)
+            self.instance_dns_manager.create_entry(uuid, address,
+                                                   "A",
+                                                   self.instance_dns_domain)
+
         self._setup_network_on_host(context, network)
         self.dhcp_driver.add_interface(context, network, address, vif)
         return address

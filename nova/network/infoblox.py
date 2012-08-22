@@ -56,20 +56,29 @@ def run_ibcli(cmd):
 
 class InfobloxDHCPDriver(dhcp_driver.DHCPDriver):
     def init_network(self, ctx, network_ref):
-        # TODO(yorik-sar): ensure network exists on InfoBlox
-        run_ibcli('conf network add %s' % (network_ref['cidr'],))
+        cidr = network_ref['cidr']
+        try:
+            run_ibcli('conf network add %s' % (cidr,))
+        except IbcliError as exc:
+            if 'The network %s already exists.' % (cidr,) not in exc.args[0]:
+                raise
 
     def teardown_network(self, ctx, network_ref):
-        # TODO(yorik-sar): remove network from InfoBlox if it is not used
-        if not_used:
-            run_ibcli('conf network del %s' % (network_ref['cidr'],))
+        # NOTE(yorik-sar): we'll keep network at Infoblox, so do nothing
+        pass
 
     def add_interface(self, ctx, network_ref, ip, vif):
         run_ibcli('conf network %s add fixed %s %s' % (network_ref['cidr'], ip,
                                                        vif['address']))
 
     def remove_interface(self, ctx, network_ref, ip, vif):
-        run_ibcli('conf network %s del fixed %s' % (network_ref['cidr'], ip))
+        try:
+            run_ibcli('conf network %s del fixed %s' % (network_ref['cidr'],
+                                                        ip))
+        except IbcliError as exc:
+            if 'The specified object was not found' % (cidr,) \
+                    not in exc.args[0]:
+                raise
 
 
 class InfobloxDNSDriver(object):
