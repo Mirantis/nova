@@ -4,6 +4,7 @@
 Isilon volume driver.
 """
 
+from nova import exception
 from nova import flags
 from nova import log as logging
 from nova.openstack.common import cfg
@@ -13,6 +14,8 @@ LOG = logging.getLogger(__name__)
 FLAGS = flags.FLAGS
 
 isilon_opts = [
+    cfg.StrOpt('isilon_isi_cmd', default='isi',
+        help='Comand to run at Isilon appliance (may contain sudo)'),
     cfg.StrOpt('isilon_target_prefix',
         default='',
         help='Prefix to generate target name'),
@@ -47,6 +50,9 @@ class IsilonDriver(san.SanISCSIDriver):
     def __init__(self):
         super(IsilonDriver, self).__init__()
 
+    def _run_isi(self, *cmd):
+        return self._execute(FLAGS.isilon_isi_cmd, *cmd)
+
     @staticmethod
     def _get_target_name(volume_name):
         """Return iSCSI target name to access volume."""
@@ -57,31 +63,36 @@ class IsilonDriver(san.SanISCSIDriver):
         This target will be accessible only for initiator added to it.
         """
         LOG.debug('Target %s creation started' % target_name)
-        try:
-            self._execute('isi', 'target', 'create', '--name=%s' % target_name,
-                          '--require-allow=%s' % True)
-        except Exception:
-            LOG.debug('Target with name %s has existed already' % target_name)
+        self._run_isi('target', 'create', '--name=%s' % target_name,
+                      '--require-allow=True')
 
-    def _update_target(self, target_name, prop_dict):
-        """Updates target due to properties in the prop_dict"""
-        LOG.debug('Target %s updating started' % target_name)
-        cmd = ['isi', 'target', 'modify', '--name=%s' % target_name]
-        for prop in prop_dict.keys():
-            cmd.append('--%s=%s' % (prop, prop_dict[prop]))
+    def _delete_lun(self, target_name):
+        """Deletes LUN #1 on specified target."""
+        LOG.debug('LUN %s:1 deleting started' % target_name)
         try:
-            self._execute(*cmd)
-        except Exception as exc:
-            LOG.debug('Exception during target updating raised with \
-                       message %s' % exc.message)
+            self._run_isi('lun', 'delete', '--name=%s:1' % target_name,
+                          '--force')
+        except exception.ProcessExecutionError as e:
+            if 'cannot find the specified LUN' in e.stderr:
+                LOG.warn('Tried to delete nonexistent LUN %s:1', target_name)
+            elif 'cannot find the specified target' in e.stderr:
+                LOG.warn('Tried to LUN in nonexistent target %s', target_name)
+            else:
+                raise
 
     def _delete_target(self, target_name):
         """Deletes target after there is no one LUN in it.
         All iSCSI sessions connected to the target are terminated.
         """
         LOG.debug('Target %s deleting started' % target_name)
-        self._execute('isi', 'target', 'delete', '--name=%s' % target_name,
-                      '--force')
+        try:
+            self._run_isi('target', 'delete', '--name=%s' % target_name,
+                          '--force')
+        except exception.ProcessExecutionError as e:
+            if 'cannot find the specified target' in e.stderr:
+                LOG.warn('Tried to delete nonexistent target %s', target_name)
+            else:
+                raise
 
     def create_volume(self, volume):
         """Creates LUN (Logical Unit) on Isilon
@@ -89,43 +100,38 @@ class IsilonDriver(san.SanISCSIDriver):
         To create LUN appropriate target should be created firstly.
         This LUN will be exported at the very beginning.
         """
-        LOG.debug('Volume with name %s creating started' % volume['name'])
-        tg_name = self._get_target_name(volume['name'])
-        self._create_target(tg_name)
-
-        cmd = ['isi', 'lun', 'create',
-               '--name=%s' % tg_name + ':1',
-               '--size=%s' % self._sizestr(volume['size'])]
-        if not FLAGS.isilon_smart_cache:
-            cmd.append('--smart-cache=False')
-        if FLAGS.isilon_read_only:
-            cmd.append('--read-only=True')
-        if not FLAGS.isilon_thin_provisioning:
-            cmd.append('--thin=False')
-        cmd.append('--access_pattern=%s' % FLAGS.isilon_access_pattern)
-        self._execute(*cmd)
+        target_name = self._get_target_name(volume['name'])
+        self._create_target(target_name)
+        self._run_isi('lun', 'create',
+            '--name=%s' % target_name + ':1',
+            '--size=%s' % self._sizestr(volume['size']),
+            '--smart-cache=%s' % (FLAGS.isilon_smart_cache,),
+            '--read-only=%s' % (FLAGS.isilon_read_only,),
+            '--thin=%s' % (FLAGS.isilon_thin_provisioning,),
+        )
         return {'provider_location': '%s:%s,1 %s' % (FLAGS.san_ip,
                                                      FLAGS.iscsi_port,
-                                                     tg_name)}
+                                                     target_name)}
 
     def create_volume_from_snapshot(self, volume, snapshot):
         """Creates LUN (Logical Unit) from snapshot for Isilon.
         :param volume: reference of volume to be created
         :param snapshot: reference of source snapshot
         """
-        LOG.debug('Volume with name %s creating from snapshot with name \
-                  %s started', (volume['name'], snapshot['name']))
-        snapshot_lun_name = self._get_target_name(snapshot['name']) + ':1'
-        volume_lun_name = volume['provider_location'].split()[-1] + ':1'
-        self._execute('isi', 'lun', 'clone', '--name=%s' % snapshot_lun_name,
-                      '--clone=%s' % volume_lun_name, '--type=normal')
+        volume_target_name = volume['provider_location'].split()[-1]
+        self._create_target(volume_target_name)
+        snapshot_target_name = self._get_target_name(snapshot['name'])
+        self._run_isi('lun', 'clone',
+                      '--name=%s:1' % snapshot_target_name,
+                      '--clone=%s:1' % volume_target_name, '--type=normal')
 
     def delete_volume(self, volume):
         """Deletes LUN (Logical Unit)
         :param volume: reference of volume to be deleted
         """
-        LOG.debug('LUN %s deletion started' % volume['name'])
-        self._delete_target(volume['provider_location'].split()[-1])
+        target_name = self._get_target_name(volume['name'])
+        self._delete_lun(target_name)
+        self._delete_target(target_name)
 
     def create_snapshot(self, snapshot):
         """Creates LUN snapshot (LUN clone with type 'snapshot' meant)
@@ -133,21 +139,20 @@ class IsilonDriver(san.SanISCSIDriver):
         'name' is the name of LUN to clone (<lun_target_name>:1)
         'clone' is the name of clone (<snapshot_target_name>:1)
         """
-        LOG.debug('Snapshot creating started for the snapshot with name %s' %
-                  snapshot['name'])
-        lun_name = self._get_target_name(snapshot['volume_name']) + ':1'
-        snapshot_name = self._get_target_name(snapshot['name']) + ':1'
-        self._execute('isi', 'lun', 'clone',
-                      '--name=%s' % lun_name,
-                      '--clone=%s' % snapshot_name, '--type=snapshot')
+        snapshot_target_name = self._get_target_name(snapshot['name'])
+        self._create_target(snapshot_target_name)
+        volume_target_name = self._get_target_name(snapshot['volume_name'])
+        self._run_isi('lun', 'clone',
+                      '--name=%s:1' % volume_target_name,
+                      '--clone=%s:1' % snapshot_target_name, '--type=snapshot')
 
     def delete_snapshot(self, snapshot):
         """Deletes LUN snapshot (LUN clone with type 'snapshot' meant).
         :param snapshot: reference of snapshot to be deleted
         """
-        LOG.debug('Snapshot deletion started for the snapshot with name %s' %
-                  snapshot['name'])
-        self._delete_target(self._get_target_name(snapshot['name']))
+        target_name = self._get_target_name(snapshot['name'])
+        self._delete_lun(target_name)
+        self._delete_target(target_name)
 
     def create_export(self, context, volume):
         """Exports LUN. There is nothing to export."""
@@ -173,12 +178,11 @@ class IsilonDriver(san.SanISCSIDriver):
         Here ip is the ip address of the connecting machine,
         initiator is the ISCSI initiator name of the connecting machine.
         """
-        LOG.debug('Connection to the volume with name %s initializing' %
-                  volume['name'])
-        self._update_target(volume['provider_location'].split()[-1],
-                            {'initiator': connector['initiator'],
-                            'require-allow': True})
-        san.SanISCSIDriver.initialize_connection(self, volume, connector)
+        target_name = volume['provider_location'].split()[-1]
+        self._run_isi('target', 'modify', '--name=%s' % (target_name,),
+                '--add-initiator=%s' % (connector['initiator'],))
+        return super(IsilonDriver, self).initialize_connection(
+                volume, connector)
 
     def terminate_connection(self, volume, connector):
         """Deletes initiator from volumes target.
@@ -186,8 +190,6 @@ class IsilonDriver(san.SanISCSIDriver):
         :param volume: reference of volume to be created
         :param connector: dictionary with information about the connector
         """
-        LOG.debug('Connection to the volume with name %s terminating' %
-                  volume['name'])
-        self._update_target(volume['provider_location'].split()[-1],
-                            {'initiator': 'no',
-                             'require-allow': False})
+        target_name = volume['provider_location'].split()[-1]
+        self._run_isi('target', 'modify', '--name=%s' % (target_name,),
+                      '--delete-initiator=%s' % (connector['initiator'],))
