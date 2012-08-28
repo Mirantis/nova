@@ -288,7 +288,7 @@ def trycmd(*args, **kwargs):
 
 def ssh_execute(ssh, cmd, process_input=None,
                 addl_env=None, check_exit_code=True):
-    LOG.debug(_('Running cmd (SSH): %s'), ' '.join(cmd))
+    LOG.debug(_('Running cmd (SSH): %s'), cmd)
     if addl_env:
         raise exception.Error(_('Environment not supported over SSH'))
 
@@ -317,7 +317,7 @@ def ssh_execute(ssh, cmd, process_input=None,
             raise exception.ProcessExecutionError(exit_code=exit_status,
                                                   stdout=stdout,
                                                   stderr=stderr,
-                                                  cmd=' '.join(cmd))
+                                                  cmd=cmd)
 
     return (stdout, stderr)
 
