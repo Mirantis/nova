@@ -19,6 +19,9 @@ isilon_opts = [
     cfg.StrOpt('isilon_target_prefix',
         default='',
         help='Prefix to generate target name'),
+    cfg.StrOpt('isilon_target_iqn_prefix',
+        default='iqn.2001-07.com.isilon:chaisi01:',
+        help='Prefix to generate target name'),
     cfg.BoolOpt('isilon_thin_provisioning',
         default=True,
         help='Should the thin provisioning be used'),
@@ -58,6 +61,12 @@ class IsilonDriver(san.SanISCSIDriver):
     def _get_target_name(volume_name):
         """Return iSCSI target name to access volume."""
         return '%s%s' % (FLAGS.isilon_target_prefix, volume_name)
+
+    @staticmethod
+    def _get_provider_location(target_name):
+        return {'provider_location': '%s:%s,1 %s%s 1' % (
+            FLAGS.san_ip, FLAGS.iscsi_port, FLAGS.isilon_target_iqn_prefix,
+            target_name)}
 
     def _create_target(self, target_name):
         """Creates target if there is no one with such name.
@@ -110,21 +119,20 @@ class IsilonDriver(san.SanISCSIDriver):
             '--read-only=%s' % (FLAGS.isilon_read_only,),
             '--thin=%s' % (FLAGS.isilon_thin_provisioning,),
         )
-        return {'provider_location': '%s:%s,1 %s' % (FLAGS.san_ip,
-                                                     FLAGS.iscsi_port,
-                                                     target_name)}
+        return self._get_provider_location(target_name)
 
     def create_volume_from_snapshot(self, volume, snapshot):
         """Creates LUN (Logical Unit) from snapshot for Isilon.
         :param volume: reference of volume to be created
         :param snapshot: reference of source snapshot
         """
-        volume_target_name = volume['provider_location'].split()[-1]
+        volume_target_name = self._get_target_name(volume['name'])
         self._create_target(volume_target_name)
         snapshot_target_name = self._get_target_name(snapshot['name'])
         self._run_isi('lun', 'clone',
                       '--name=%s:1' % snapshot_target_name,
                       '--clone=%s:1' % volume_target_name, '--type=normal')
+        return self._get_provider_location(volume_target_name)
 
     def delete_volume(self, volume):
         """Deletes LUN (Logical Unit)
@@ -179,7 +187,7 @@ class IsilonDriver(san.SanISCSIDriver):
         Here ip is the ip address of the connecting machine,
         initiator is the ISCSI initiator name of the connecting machine.
         """
-        target_name = volume['provider_location'].split()[-1]
+        target_name = self._get_target_name(volume['name'])
         self._run_isi('target', 'modify', '--name=%s' % (target_name,),
                 '--add-initiator=%s' % (connector['initiator'],))
         return super(IsilonDriver, self).initialize_connection(
@@ -191,6 +199,6 @@ class IsilonDriver(san.SanISCSIDriver):
         :param volume: reference of volume to be created
         :param connector: dictionary with information about the connector
         """
-        target_name = volume['provider_location'].split()[-1]
+        target_name = self._get_target_name(volume['name'])
         self._run_isi('target', 'modify', '--name=%s' % (target_name,),
                       '--delete-initiator=%s' % (connector['initiator'],))
