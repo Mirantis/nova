@@ -19,18 +19,19 @@ isilon_opts = [
     cfg.StrOpt('isilon_target_prefix',
         default='',
         help='Prefix to generate target name'),
-    cfg.StrOpt('isilon_thin_provisioning',
+    cfg.BoolOpt('isilon_thin_provisioning',
         default=True,
         help='Should the thin provisioning be used'),
-    cfg.StrOpt('isilon_smart_cache',
+    cfg.BoolOpt('isilon_smart_cache',
         default=True,
         help='Is the caching ot LUN files enabled'),
-    cfg.StrOpt('isilon_access_pattern',
+    cfg.BoolOpt('isilon_access_pattern',
         default='random',
         help='Defines LUN access pattern'),
-    cfg.StrOpt('isilon_read_only',
+    cfg.BoolOpt('isilon_read_only',
         default=False,
-        help='Should the LUN be read-only')]
+        help='Should the LUN be read-only'),
+]
 FLAGS.register_opts(isilon_opts)
 
 
