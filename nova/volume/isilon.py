@@ -130,8 +130,11 @@ class IsilonDriver(san.SanISCSIDriver):
         self._create_target(volume_target_name)
         snapshot_target_name = self._get_target_name(snapshot['name'])
         self._run_isi('lun', 'clone',
-                      '--name=%s:1' % snapshot_target_name,
-                      '--clone=%s:1' % volume_target_name, '--type=normal')
+            '--name=%s:1' % snapshot_target_name,
+            '--clone=%s:1' % volume_target_name, '--type=normal',
+            '--smart-cache=%s' % (FLAGS.isilon_smart_cache,),
+            '--read-only=%s' % (FLAGS.isilon_read_only,),
+        )
         return self._get_provider_location(volume_target_name)
 
     def delete_volume(self, volume):
