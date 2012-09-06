@@ -19,16 +19,18 @@ class TestIsilonDriver(nova.test.TestCase):
         'provider_location': '',
         'name': volume_name,
         'size': 1,
-    }
+        }
     volume_ref2 = {
-        'provider_location': '1.1.1.1:3260,1 tgt_volume1',
+        'provider_location': '1.1.1.1:3260,1 '
+                             'iqn.2001-07.com.isilon:'
+                             'chaisi01:tgt_volume1 1',
         'name': volume_name,
         'size': 1,
         }
     snapshot_ref = {
         'name': snapshot_name,
         'volume_name': volume_name,
-    }
+        }
     connector = {
         'initiator': 'connector'
     }
@@ -43,61 +45,84 @@ class TestIsilonDriver(nova.test.TestCase):
             isilon_target_prefix='tgt_',
             isilon_access_pattern='concurrency'
         )
-        self.mox_execute = self.mox.CreateMockAnything()
+        self.mox_run_isi = self.mox.CreateMockAnything()
         self.driver = isilon.IsilonDriver()
-        self.driver._execute = self.mox_execute
+        self.driver._run_isi = self.mox_run_isi
         self.mox_super_initialize = self.mox.CreateMockAnything()
         san.SanISCSIDriver.initialize_connection = self.mox_super_initialize
 
     def test_create_volume(self):
-        self.mox_execute('isi', 'target', 'create',
+        self.mox_run_isi('target', 'create',
                          '--name=tgt_volume1',
                          '--require-allow=True')
-        self.mox_execute('isi', 'lun', 'create',
+        self.mox_run_isi('lun', 'create',
                          '--name=tgt_volume1:1',
                          '--size=1G',
-                         '--access_pattern=concurrency')
+                         '--smart-cache=True',
+                         '--read-only=False',
+                         '--thin=True')
         self.mox.ReplayAll()
         res = self.driver.create_volume(self.volume_ref1)
-        self.assertEqual(res, {'provider_location':
-                               '1.1.1.1:3260,1 tgt_volume1'})
+        self.assertEqual(res, {'provider_location': '1.1.1.1:3260,1 '
+                                                    'iqn.2001-07.com.isilon:'
+                                                    'chaisi01:tgt_volume1 1'})
 
     def test_create_volume_from_snapshot(self):
-        self.mox_execute('isi', 'lun', 'clone', '--name=tgt_snapshot1:1',
-                         '--clone=tgt_volume1:1', '--type=normal')
+        self.mox_run_isi('target', 'create',
+                         '--name=tgt_volume1',
+                         '--require-allow=True')
+        self.mox_run_isi('lun', 'clone',
+                         '--name=tgt_snapshot1:1',
+                         '--clone=tgt_volume1:1',
+                         '--type=normal',
+                         '--smart-cache=True',
+                         '--read-only=False')
         self.mox.ReplayAll()
         self.driver.create_volume_from_snapshot(self.volume_ref2,
                                                 self.snapshot_ref)
 
     def test_delete_volume(self):
-        self.mox_execute('isi', 'target', 'delete',
-                         '--name=tgt_volume1', '--force')
+        self.mox_run_isi('lun', 'delete',
+                         '--name=tgt_volume1:1',
+                         '--force')
+        self.mox_run_isi('target', 'delete',
+                         '--name=tgt_volume1',
+                         '--force')
         self.mox.ReplayAll()
         self.driver.delete_volume(self.volume_ref2)
 
     def test_create_snapshot(self):
-        self.mox_execute('isi', 'lun', 'clone',
+        self.mox_run_isi('target', 'create',
+                         '--name=tgt_snapshot1',
+                         '--require-allow=True')
+        self.mox_run_isi('lun', 'clone',
                          '--name=tgt_volume1:1',
-                         '--clone=tgt_snapshot1:1', '--type=snapshot')
+                         '--clone=tgt_snapshot1:1',
+                         '--type=snapshot')
         self.mox.ReplayAll()
         self.driver.create_snapshot(self.snapshot_ref)
 
     def test_delete_snapshot(self):
-        self.mox_execute('isi', 'target', 'delete',
-                         '--name=tgt_snapshot1', '--force')
+        self.mox_run_isi('lun', 'delete',
+                         '--name=tgt_snapshot1:1',
+                         '--force')
+        self.mox_run_isi('target', 'delete',
+                         '--name=tgt_snapshot1',
+                         '--force')
         self.mox.ReplayAll()
         self.driver.delete_snapshot(self.snapshot_ref)
 
     def test_initialize_connection(self):
-        self.mox_execute('isi', 'target', 'modify', '--name=tgt_volume1',
-                         '--initiator=connector', 'require-allow=True')
-        self.mox_super_initialize(self.driver, self.volume_ref2,
-                                  self.connector)
+        self.mox_run_isi('target', 'modify',
+                         '--name=tgt_volume1',
+                         '--add-initiator=connector')
+        self.mox_super_initialize(self.volume_ref2, self.connector)
         self.mox.ReplayAll()
         self.driver.initialize_connection(self.volume_ref2, self.connector)
 
     def test_terminate_connection(self):
-        self.mox_execute('isi', 'target', 'modify', '--name=tgt_volume1',
-                         '--initiator=no', 'require-allow=False')
+        self.mox_run_isi('target', 'modify',
+                         '--name=tgt_volume1',
+                         '--delete-initiator=connector')
         self.mox.ReplayAll()
         self.driver.terminate_connection(self.volume_ref2, self.connector)
