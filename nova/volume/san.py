@@ -65,7 +65,7 @@ san_opts = [
                default=22,
                help='SSH port to use with SAN'),
     cfg.BoolOpt('san_is_local',
-                default='false',
+                default=False,
                 help='Execute commands locally instead of over SSH; '
                      'use if the volume service is running on the SAN device'),
     cfg.StrOpt('san_zfs_volume_base',
