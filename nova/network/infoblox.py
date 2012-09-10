@@ -70,6 +70,7 @@ class InfobloxDHCPDriver(dhcp_driver.DHCPDriver):
     def add_interface(self, ctx, network_ref, ip, vif):
         run_ibcli('conf network %s add fixed %s %s' % (network_ref['cidr'], ip,
                                                        vif['address']))
+        run_ibcli('restart dhcp')
 
     def remove_interface(self, ctx, network_ref, ip, vif):
         try:
@@ -79,6 +80,7 @@ class InfobloxDHCPDriver(dhcp_driver.DHCPDriver):
             if 'The specified object was not found' % (cidr,) \
                     not in exc.args[0]:
                 raise
+        run_ibcli('restart dhcp')
 
 
 class InfobloxDNSDriver(object):
