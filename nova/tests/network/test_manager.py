@@ -392,6 +392,7 @@ class VlanNetworkTestCase(test.TestCase):
         self.mox.StubOutWithMock(db, 'fixed_ip_update')
         self.mox.StubOutWithMock(db,
                               'virtual_interface_get_by_instance_and_network')
+        self.mox.StubOutWithMock(db, 'instance_get')
 
         db.fixed_ip_associate(mox.IgnoreArg(),
                               mox.IgnoreArg(),
@@ -403,11 +404,15 @@ class VlanNetworkTestCase(test.TestCase):
                            mox.IgnoreArg())
         db.virtual_interface_get_by_instance_and_network(mox.IgnoreArg(),
                 mox.IgnoreArg(), mox.IgnoreArg()).AndReturn({'id': 0})
+        instance_ref = {'display_name': HOST,
+                        'uuid': 'test-00001'}
+        db.instance_get(self.context, 0).AndReturn(instance_ref)
+        db.instance_get(self.context, 0).AndReturn(instance_ref)
         self.mox.ReplayAll()
 
         network = dict(networks[0])
         network['vpn_private_address'] = '192.168.0.2'
-        self.network.allocate_fixed_ip(None, 0, network, vpn=True)
+        self.network.allocate_fixed_ip(self.context, 0, network, vpn=True)
 
     def test_vpn_allocate_fixed_ip_no_network_id(self):
         network = dict(networks[0])
@@ -429,9 +434,13 @@ class VlanNetworkTestCase(test.TestCase):
                               'virtual_interface_get_by_instance_and_network')
         self.mox.StubOutWithMock(db, 'instance_get')
 
-        db.instance_get(mox.IgnoreArg(),
-                        mox.IgnoreArg()).AndReturn({'security_groups':
-                                                             [{'id': 0}]})
+        instance_ref = {'display_name': HOST,
+                        'uuid': 'test-00001',
+                        'security_groups': [{'id': 0}],
+                        'availability_zone': ''}
+        db.instance_get(mox.IgnoreArg(), 0).AndReturn(instance_ref)
+        db.instance_get(mox.IgnoreArg(), 0).AndReturn(instance_ref)
+        db.instance_get(mox.IgnoreArg(), 0).AndReturn(instance_ref)
         db.fixed_ip_associate_pool(mox.IgnoreArg(),
                                    mox.IgnoreArg(),
                                    mox.IgnoreArg()).AndReturn('192.168.0.1')
@@ -809,10 +818,13 @@ class VlanNetworkTestCase(test.TestCase):
         db.virtual_interface_get_by_instance_and_network(mox.IgnoreArg(),
                 mox.IgnoreArg(), mox.IgnoreArg()).AndReturn({'id': 0})
 
-        db.instance_get(mox.IgnoreArg(),
-                        mox.IgnoreArg()).AndReturn({'security_groups':
-                                                             [{'id': 0}],
-                                                    'availability_zone': ''})
+        instance_ref = {'display_name': HOST,
+                        'uuid': 'test-00001',
+                        'security_groups': [{'id': 0}],
+                        'availability_zone': ''}
+        db.instance_get(mox.IgnoreArg(), 1).AndReturn(instance_ref)
+        db.instance_get(mox.IgnoreArg(), 1).AndReturn(instance_ref)
+        db.instance_get(mox.IgnoreArg(), 1).AndReturn(instance_ref)
         db.fixed_ip_associate_pool(mox.IgnoreArg(),
                                    mox.IgnoreArg(),
                                    mox.IgnoreArg()).AndReturn('192.168.0.101')
