@@ -1200,7 +1200,8 @@ class NetworkManager(manager.SchedulerDependentManager):
                                                    self.instance_dns_domain)
         self._setup_network_on_host(context, network)
         if network['cidr']:
-            self.dhcp_driver.add_interface(context, network, address, vif)
+            self.dhcp_driver.add_interface(context, network, address, vif,
+                    instance_ref)
         return address
 
     def deallocate_fixed_ip(self, context, address, **kwargs):
@@ -1801,7 +1802,8 @@ class VlanManager(RPCAllocateFixedIP, FloatingIP, NetworkManager):
                                                    self.instance_dns_domain)
 
         self._setup_network_on_host(context, network)
-        self.dhcp_driver.add_interface(context, network, address, vif)
+        self.dhcp_driver.add_interface(context, network, address, vif,
+                instance_ref)
         return address
 
     @wrap_check_policy

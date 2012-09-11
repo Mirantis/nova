@@ -14,7 +14,7 @@ class DHCPDriver(object):
     def teardown_network(self, ctx, network_ref):
         raise NotImplementedError
 
-    def add_interface(self, ctx, network_ref, ip, vif):
+    def add_interface(self, ctx, network_ref, ip, vif, instance_ref):
         raise NotImplementedError
 
     def remove_interface(self, ctx, network_ref, ip, vif):
@@ -35,7 +35,7 @@ class LinuxNetDHCPDriver(DHCPDriver):
         dev = self.driver.get_dev(network_ref)
         self.driver.update_dhcp(ctx, dev, network_ref)
 
-    def add_interface(self, ctx, network_ref, ip, vif):
+    def add_interface(self, ctx, network_ref, ip, vif, instance_ref):
         # NOTE(yorik-sar): it's called after init_network anyway
         pass
 

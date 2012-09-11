@@ -67,9 +67,22 @@ class InfobloxDHCPDriver(dhcp_driver.DHCPDriver):
         # NOTE(yorik-sar): we'll keep network at Infoblox, so do nothing
         pass
 
-    def add_interface(self, ctx, network_ref, ip, vif):
-        run_ibcli('conf network %s add fixed %s %s' % (network_ref['cidr'], ip,
-                                                       vif['address']))
+    def add_interface(self, ctx, network_ref, ip, vif, instance_ref):
+        options = ' option 12="%s.%s"' % (instance_ref['hostname'],
+                                        FLAGS.dhcp_domain)
+        if network_ref['multi_host'] and FLAGS.use_external_gateway:
+            try:
+                options += ' option 3="%s"' % (network_ref['gateway'],)
+            except KeyError:
+                pass
+        if network_ref.get('dns1'):
+            options += ' option 6="%s"' % (network_ref['dns1'],)
+        if network_ref.get('dns2'):
+            options += ' option 6="%s"' % (network_ref['dns2'],)
+        options += ' option 15="%s"' % (FLAGS.dhcp_domain,)
+
+        run_ibcli('conf network %s add fixed %s %s %s' % (network_ref['cidr'],
+                                  ip, vif['address'], options))
         run_ibcli('restart dhcp')
 
     def remove_interface(self, ctx, network_ref, ip, vif):
@@ -77,7 +90,7 @@ class InfobloxDHCPDriver(dhcp_driver.DHCPDriver):
             run_ibcli('conf network %s del fixed %s' % (network_ref['cidr'],
                                                         ip))
         except IbcliError as exc:
-            if 'The specified object was not found' % (cidr,) \
+            if 'The specified object was not found' % (network_ref['cidr'],) \
                     not in exc.args[0]:
                 raise
         run_ibcli('restart dhcp')
