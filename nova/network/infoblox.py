@@ -111,7 +111,17 @@ class InfobloxDNSDriver(object):
         if type.lower() != 'a':
             raise exception.InvalidInput(_("This driver only supports "
                                            "type 'a'"))
-        run_ibcli('conf zone %s add host %s %s' % (domain, name, address))
+        create_cmd = 'conf zone %s add host %s %s' % (domain, name, address)
+        try:
+            run_ibcli(create_cmd)
+        except IbcliError as exc:
+            if 'A parent was not found.' in exc.args[0]:
+                LOG.warn('Domain %s does not exist on Infoblox appliance.'
+                        'Creating.', domain)
+                self.create_domain(domain)
+                run_ibcli(create_cmd)
+            else:
+                raise
 
     def delete_entry(self, name, domain):
         run_ibcli('conf zone %s del host %s' % (domain, name))
@@ -131,6 +141,8 @@ class InfobloxDNSDriver(object):
 
     def create_domain(self, fqdomain):
         run_ibcli('conf zone add %s' % (fqdomain,))
+        run_ibcli('restart dns')
 
     def delete_domain(self, fqdomain):
         run_ibcli('conf zone del %s' % (fqdomain,))
+        run_ibcli('restart dns')
