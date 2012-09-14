@@ -90,8 +90,7 @@ class InfobloxDHCPDriver(dhcp_driver.DHCPDriver):
             run_ibcli('conf network %s del fixed %s' % (network_ref['cidr'],
                                                         ip))
         except IbcliError as exc:
-            if 'The specified object was not found' % (network_ref['cidr'],) \
-                    not in exc.args[0]:
+            if 'The specified object was not found' not in exc.args[0]:
                 raise
         run_ibcli('restart dhcp')
 
